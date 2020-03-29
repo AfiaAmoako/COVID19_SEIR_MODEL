@@ -1,0 +1,303 @@
+---
+title: 'US: NYC'
+author: "Afia Amoako"
+date: '2020-03-29'
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+```{r setup, include=FALSE}
+#required package
+library(httr)
+library(tidyverse)
+library(lubridate)
+library(knitr)
+```
+
+##Introduction
+
+Analysis for the impact of intervention on COVID transmission is adapted from Wang, H., Wang, Z., Dong, Y., Chang, R., Xu, C., Yu, X., Zhang, S., Tsamlag, L., Shang, M., Huang, J., Wang, Y., Xu, G., Shen, T., Zhang, X., & Cai, Y. (2020). Phase-adjusted estimation of the number of Coronavirus Disease 2019 cases in Wuhan, China. Cell Discovery, 6(1), 1–8. https://doi.org/10.1038/s41421-020-0148-0
+
+
+###Importing Data 
+```{r}
+COVID.US <- read.csv("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-states.csv")
+head(COVID.US, 10)
+summary(COVID.US)
+```
+
+###Cleaning Italy Table 
+```{r}
+#analysis up to 28th march 
+
+#CASES
+#subset Italy cumulative cases
+COVID.NY <- COVID.US %>% filter(state == "New York")
+COVID.NY$date <- as.Date(COVID.NY$date)
+summary(COVID.NY)
+cum.cases.NY <- COVID.NY[ ,c(1,4)]
+cum.death.NY <- COVID.NY[ ,c(1,5)]
+
+#plot.cummulative.cases
+plot(cum.cases.NY$date,  cum.cases.NY$cases, type = "l",  lwd = "3", col = "navy",main = "Cumulative Cases in New York", xlab = "Date", ylab = "Cases")
+lines(cum.death.NY$date,  cum.death.NY$death, lwd = "3", col ="pink")
+```
+
+#NYC
+##Model Application: Estimating the potential number of infectious people based on different R0 values
+```{r}
+#assumption: random mixing, person to person transmission, no difference in individual immunity, no deaths
+
+# Parameter values
+#initial variables per year
+N_NYC <- 8623000 #population of Italy
+I_NY <- 1 #ikmported cases from Italy
+E_NY <- 20 * I_NY #number potentially exposed
+R_NY <- 0 
+S_NY <- N_NY-E_NY-I_NY-R_NY
+alpha <- 1/5.2 #incubation period
+gamma <- 1/5 #recovery period
+mu <- 3.5/100 #death rate
+duration <- 5 #days 
+
+# R0 and beta for different phases based on the impact of intervention to minimize transmission
+R0_1 <- 1.5 
+R0_2 <- 2.6
+R0_3 <- 3.5 #without any intervention
+R0_4 <- 0.9
+beta_1 <- R0_1/(duration)
+beta_2 <- R0_2/(duration)
+beta_3 <- R0_3/(duration)
+beta_4 <- R0_4/(duration)
+
+#time specification
+dt <- 1
+start <- 0
+end_NY <- 57
+time_NY <- seq(start, end_NY, by = dt)
+niter_NY <- (end_NY - start) / dt + 1
+s_date_NY <- mdy("1-31-2020") #first cases reported in Rome
+e_date_NY <- mdy("3-28-2020") #last up to date results
+axis_NY <- seq(from = s_date_NY, to = e_date_NY, by = "day")
+
+
+#create table
+l <- 1 #index for beta_1: R0: 1.9
+m <- 2 #index for beta_2: R0: 2.6
+h <- 3 #index for beta_2: R0: 3.5
+
+X_NY <- array(data = 0, dim = c(niter_NY, 5, 3)) #created an array to catch the results
+colnames(X_NY) <- c("S", "E", "I","R", "New Case")
+#low
+X_NY[1, 1, l] <- S_NY #initial susuceptible population R0: 1.9
+X_NY[1, 2, l] <- E_NY #initial latent population R0: 1.9
+X_NY[1, 3, l] <- I_NY #initial infectious population R0: 1.9
+X_NY[1, 4, l] <- R_NY #initial recovered population R0: 1.9
+X_NY[1, 5, l] <- I_NY #initial infectious population R0: 1.9: using this row to count the number of new cases for cumulative incidence calculation.
+#medium
+X_NY[1, 1, m] <- S_NY #initial susuceptible population R0: 2.6
+X_NY[1, 2, m] <- E_NY #initial latent population R0: 2.6
+X_NY[1, 3, m] <- I_NY #initial infectious population R0: 2.6
+X_NY[1, 4, m] <- R_NY #initial recovered population R0: 2.6
+X_NY[1, 5, l] <- I_NY #initial infectious population R0: 2.6: using this row to count the number of new cases for cumulative incidence calculation.
+
+#high 
+X_NY[1, 1, h] <- S_NY #initial susuceptible population R0: 3.5
+X_NY[1, 2, h] <- E_NY #initial latent population R0: 3.5
+X_NY[1, 3, h] <- I_NY #initial infectious population R0: 3.5
+X_NY[1, 4, h] <- R_NY #initial recovered population R0: 3.5
+X_NY[1, 5, l] <- I_NY #initial infectious population R0: 3.5: using this row to count the number of new cases for cumulative incidence calculation.
+
+
+for (i in 2:niter_NY) { 
+  #low
+  X_NY[i,1, l] <- X_NY[i-1, 1, l] + dt * (-beta_1 * X_NY[i-1,1,l] * (X_NY[i-1,3,l]/sum(X_NY[i-1, ,l])) )  #S
+  X_NY[i,2, l]<- X_NY[i-1,2, l] + dt * (beta_1 * X_NY[i-1,1,l] *  (X_NY[i-1,3,l]/sum(X_NY[i-1, ,l])) - alpha * X_NY[i-1,2,l]) #E
+  X_NY[i,3, l] <- X_NY[i-1,3, l] + dt * (alpha * X_NY[i-1,2, l] - gamma * X_NY[i-1,3, l])  #I 
+  X_NY[i,4, l] <- X_NY[i-1,4, l] + dt * (gamma * X_NY[i-1,3, l]) #R
+  X_NY[i,5, l] <- dt * (alpha * X_NY[i-1,2, l]) #new cases added 
+  
+  #medium
+  X_NY[i,1, m] <- X_NY[i-1, 1, m] + dt * (-beta_2 * X_NY[i-1,1,m] * (X_NY[i-1,3,m]/sum(X_NY[i-1, ,m])) ) #S
+  X_NY[i,2, m]<- X_NY[i-1,2, m] + dt * (beta_2 * X_NY[i-1,1,m] * (X_NY[i-1,3,m]/sum(X_NY[i-1, ,m])) - alpha * X_NY[i-1,2,m]) #E
+  X_NY[i,3, m] <- X_NY[i-1,3, m] + dt * (alpha * X_NY[i-1,2, m] - gamma * X_NY[i-1,3, m])  #I 
+  X_NY[i,4, m] <- X_NY[i-1,4, m] + dt * (gamma * X_NY[i-1,3, m]) #R    
+  X_NY[i,5, m] <- dt * (alpha * X_NY[i-1,2, m]) #new cases added
+  
+  #high
+  X_NY[i,1, h] <- X_NY[i-1, 1, h] + dt * (-beta_3 * X_NY[i-1,1,h] * (X_NY[i-1,3,h]/sum(X_NY[i-1, ,h])) ) #S
+  X_NY[i,2, h]<- X_NY[i-1,2, h] + dt * (beta_3 * X_NY[i-1,1,h] * (X_NY[i-1,3,h]/sum(X_NY[i-1, ,h])) - alpha * X_NY[i-1,2,h]) #E
+  X_NY[i,3, h] <- X_NY[i-1,3, h] + dt * (alpha * X_NY[i-1,2, h] - gamma * X_NY[i-1,3, h])  #I 
+  X_NY[i,4, h] <- X_NY[i-1,4, h] + dt * (gamma * X_NY[i-1,3, h]) #R
+  X_NY[i,5, h] <- dt * (alpha * X_NY[i-1,2, h]) #new cases added
+  
+}
+
+low_beta_NY <- as.data.frame(X_NY[ , ,l])
+medium_beta_NY <- as.data.frame(X_NY[ , ,m])
+high_beta_NY <- as.data.frame(X_NY[ , ,h])
+high_beta_NY$Date <- axis_NY
+high_beta_NY$CumSum <- cumsum(high_beta_NY$`New Case`)
+medium_beta_NY$Date <- axis_NY
+low_beta_NY$Date <- axis_NY
+
+
+#"Number of People Infectious in  Italy with varying R0 values",
+par(mfrow = c(1, 2))
+plot(high_beta_NY$I ~ axis_NY, type = 'l',  xlab = "Date", ylab = "Number of People Infectious", col = 'navy', lwd = 3)
+ lines(medium_beta_NY$I ~ axis_NY, col = 'red', lwd = 3)
+ lines(low_beta_NY$I ~ axis_NY, col = 'pink', lwd = 3)
+ legend("topleft", legend = c( "Model R: 3.5","Model R:2.6", "Model R: 1.5"), fill = c("navy", "red", "pink"), col = c("navy", "red", "pink"), cex = 0.5)
+
+ 
+#"Comparing Modeled Cumulative Cases in Italy with varying R0 values to current cases",
+plot(cum.cases.italy[c(10:67), 1], cum.cases.italy[c(10:67), 2], type = 'l', xlab = "Date", ylab = "Cumulative Cases", col = "chartreuse4", lwd = 3)
+ lines(cumsum(low_beta_NY$`New Case`) ~ axis_NY, col = "pink", lwd = 3)
+ lines(cumsum(medium_beta_NY$`New Case`) ~ axis_NY, col = 'red', lwd = 3)
+ lines(cumsum(high_beta_NY$`New Case`) ~ axis_NY, col = "navy", lwd = 3)
+ legend("topleft", legend = c("Current Cases \n in Italy", "Model R: 3.5","Model R:2.6", "Model R:1.5"), fill = c("chartreuse4", "navy", "red", "pink"), col = c("chartreuse4", "navy", "red", "pink"), cex = 0.5)
+  #caption to see how my model can relate to what is currently seen in italy, I used the model to calculate the number of new infectious people occuring based on the number of people moving into the I column and compared this to the current information on cumulative cases. This will allow me to compare with current cases. 
+ 
+ par(mfrow = c(1, 1))
+
+ 
+#after graphing, it seem that 3.5 is actually a better growth rate because it is similar to the italy number. Assuming that italy is only counting those who are presenting for testing, tends to be those with some symptoms and this is not including those who are incubating, so could be under estimation. Thus used the I to represent the symptomatic and calculated cumulative cases by the number of cases moving from E to I each time step and then taking the  cumulative sum. 3.5 is a good R0 to start with. 
+```
+
+##Model Application intervention!
+
+I applied interventions put in place to slow transmission looked at how that will change incidences. I compared my values to the cumulative cases, looking at the current situation, my model approximation of the current situation and if the intervention actually creates an impact
+
+```{r}
+
+##############################Intervention###########################################
+
+#assumption: random mixing, person to person transmission, no difference in individual immunity, no deaths
+# Parameter values
+N_NY <- 60480000
+I_NY <- 2 
+E_NY <- 20 * I_NY
+R_NY <- 0 
+S_NY <- N_NY-E_NY-I_NY-R_NY
+alpha <- 1/5.2 #incubation period
+gamma <- 1/5 #recovery period
+duration <-5 #days 
+# R0 and beta for different phases based on the impact of intervention to minimize transmission #using infromation from more recent papers. Since R0 = ce/D, these interventions are targeting the ce (contact rate) to reduce transmision. 
+
+
+R0_1 <- 1.5 #low end (the CI from JHU and authors)
+R0_2 <- 2.6 #what was calculated as gthe potential R
+R0_3 <- 3.5 #high end (the CI from JHU and authors)
+R0_4 <- 0.5 #updated: reduces contact by up to 85% because of lockdown
+beta_1 <- R0_1/(duration)
+beta_2 <- R0_2/(duration)
+beta_3 <- R0_3/(duration)
+beta_4 <- R0_4/(duration)
+
+#time specification
+dt <- 1
+start <- 0
+end_NY_p <- 90 #days
+time_NY_p <- seq(start, end_NY_p, by = dt)
+niter_NY_p <- (end_NY_p - start) / dt + 1
+s_date_NY_p <- mdy("1-31-2020")
+e_date_NY_p <- mdy("4-30-2020")
+axis_NY_p <- seq(from = s_date_NY_p, to = e_date_NY_p, by = "day")
+
+
+X_NY_p <- array(data = 0, dim = c(niter_NY_p, 5)) #created an array to catch the results
+colnames(X_NY_p) <- c("S", "E", "I","R", "New Cases")
+
+X_NY_p[1, 1] <- S_NY #initial susuceptible population 
+X_NY_p[1, 2] <- E_NY #initial latent population 
+X_NY_p[1, 3] <- I_NY #initial infectious population 
+X_NY_p[1, 4] <- R_NY #initial recovered population 
+X_NY_p[1, 5] <- I_NY #new cases
+
+for (i in 2:niter_NY_p) { 
+  if(i < 25) {
+  #phase 1 transmission with an R0 of 3.1 (January 31 - February 23rd)
+  X_NY_p[i,1] <- X_NY_p[i-1, 1] + dt * (-beta_3 * X_NY_p[i-1,1] * (X_NY_p[i-1,3]/sum(X_NY_p[i-1,])) )  #S
+  X_NY_p[i,2]<- X_NY_p[i-1,2] + dt * (beta_3 * X_NY_p[i-1,1] * (X_NY_p[i-1,3]/sum(X_NY_p[i-1,])) - alpha * X_NY_p[i-1,2]) #E
+  X_NY_p[i,3] <- X_NY_p[i-1,3] + dt * (alpha * X_NY_p[i-1,2] - gamma * X_NY_p[i-1,3])  #I 
+  X_NY_p[i,4] <- X_NY_p[i-1,4] + dt * (gamma * X_NY_p[i-1,3]) #R
+  X_NY_p[i,5] <- dt * (alpha * X_NY_p[i-1,2])
+  }
+  else {
+    if ( i >= 25 & i < 41) { 
+  #phase 2 transmission with an R0 of 1.9 (February 24 -  March 8) blocking the north
+  X_NY_p[i,1] <- X_NY_p[i-1, 1] + dt * (-beta_2 * X_NY_p[i-1,1] * (X_NY_p[i-1,3]/sum(X_NY_p[i-1,])) )  #S
+  X_NY_p[i,2]<- X_NY_p[i-1,2] + dt * (beta_2 * X_NY_p[i-1,1] * (X_NY_p[i-1,3]/sum(X_NY_p[i-1,])) - alpha * X_NY_p[i-1,2]) #E
+  X_NY_p[i,3] <- X_NY_p[i-1,3] + dt * (alpha * X_NY_p[i-1,2] - gamma * X_NY_p[i-1,3])  #I 
+  X_NY_p[i,4] <- X_NY_p[i-1,4] + dt * (gamma * X_NY_p[i-1,3]) #R
+  X_NY_p[i,5] <- dt * (alpha * X_NY_p[i-1,2])
+    }
+    else{
+      if( i >= 41 & i < 55){
+        #phase 3 transmission with an R0 of 0.65 (March 8 - March 10) North total Lockdown
+        X_NY_p[i,1] <- X_NY_p[i-1, 1] + dt * (-beta_1 * X_NY_p[i-1,1] * (X_NY_p[i-1,3]/sum(X_NY_p[i-1,])) )  #S
+        X_NY_p[i,2]<- X_NY_p[i-1,2] + dt * (beta_1 * X_NY_p[i-1,1] * (X_NY_p[i-1,3]/sum(X_NY_p[i-1,])) - alpha * X_NY_p[i-1,2]) #E
+         X_NY_p[i,3] <- X_NY_p[i-1,3] + dt * (alpha * X_NY_p[i-1,2] - gamma * X_NY_p[i-1,3])  #I 
+        X_NY_p[i,4] <- X_NY_p[i-1,4] + dt * (gamma * X_NY_p[i-1,3]) #R
+         X_NY_p[i,5] <- dt * (alpha * X_NY_p[i-1,2])  
+      }
+      else{
+        X_NY_p[i,1] <- X_NY_p[i-1, 1] + dt * (-beta_4 * X_NY_p[i-1,1] * (X_NY_p[i-1,3]/sum(X_NY_p[i-1,])) )  #S
+        X_NY_p[i,2]<- X_NY_p[i-1,2] + dt * (beta_4 * X_NY_p[i-1,1] * (X_NY_p[i-1,3]/sum(X_NY_p[i-1,])) - alpha * X_NY_p[i-1,2]) #E
+         X_NY_p[i,3] <- X_NY_p[i-1,3] + dt * (alpha * X_NY_p[i-1,2] - gamma * X_NY_p[i-1,3])  #I 
+        X_NY_p[i,4] <- X_NY_p[i-1,4] + dt * (gamma * X_NY_p[i-1,3]) #R
+         X_NY_p[i,5] <- dt * (alpha * X_NY_p[i-1,2])  
+      }
+      }
+  }
+  }
+
+X_NY_p <- as.data.frame(X_NY_p)
+X_NY_p$date <- axis_NY_p
+
+  
+##############################Comparison with no iuntervention###########################################
+#no intervention using high transmission rate 
+X_NY_p_n <- array(data = 0, dim = c(niter_NY_p, 5)) #created an array to catch the results
+colnames(X_NY_p_n) <- c("S", "E", "I","R", "New Cases")
+
+X_NY_p_n[1, 1] <- S_NY #initial susuceptible population 
+X_NY_p_n[1, 2] <- E_NY #initial latent population 
+X_NY_p_n[1, 3] <- I_NY #initial infectious population 
+X_NY_p_n[1, 4] <- R_NY #initial recovered population 
+X_NY_p_n[1, 5] <- I_NY #new cases
+
+for(i in 2:niter_NY_p) {
+  X_NY_p_n [i,1] <- X_NY_p_n [i-1, 1] + dt * (-beta_3 * X_NY_p_n [i-1,1] * (X_NY_p_n[i-1,3]/sum(X_NY_p_n[i-1,])) )  #S
+  X_NY_p_n [i,2]<- X_NY_p_n [i-1,2] + dt * (beta_3 * X_NY_p_n [i-1,1] * (X_NY_p_n[i-1,3]/sum(X_NY_p_n[i-1,])) - alpha * X_NY_p[i-1,2]) #E
+  X_NY_p_n [i,3] <- X_NY_p_n [i-1,3] + dt * (alpha * X_NY_p_n [i-1,2] - gamma * X_NY_p_n [i-1,3])  #I 
+  X_NY_p_n [i,4] <- X_NY_p_n [i-1,4] + dt * (gamma * X_NY_p_n [i-1,3]) #R
+  X_NY_p_n [i,5] <- dt * (alpha * X_NY_p_n [i-1,2]) #new cases
+  }
+
+X_NY_p_n <- as.data.frame(X_NY_p_n)
+X_NY_p_n$date <- axis_NY_p
+  
+
+###########plots#################
+#plot: number of new cases main = "Impact of Intervention on the Number of Infectious People Each Day",
+plot(X_NY_p[c(1:24), 3] ~ axis_NY_p[c(1:24)] , type = 'l', col = 'steelblue4',  lwd = 3,  ylab = "Number of People Infectious", xlab = "Time (Days)",  xlim = as.Date(c("2020-01-31", "2020-04-30")), ylim = c(0,10000))
+  lines(X_NY_p[c(24:41), 3] ~ axis_NY_p[c(24:41)] , col = 'violetred4', lwd = 3)
+  lines(X_NY_p[c(41:55), 3] ~ axis_NY_p[c(41:55)], col = 'chartreuse4', lwd = 3)
+  lines(X_NY_p[c(55:91), 3] ~ axis_NY_p[c(55:91)], col = 'red', lwd = 3)
+  lines(X_NY_p_n[c(1:91), 3] ~ axis_NY_p[c(1:91)] , col = 'pink', lwd = 3) #if we are assuming that transmission continued at a high rate
+legend("topright", legend = c("R=3.3", "R=2.6", "R=1.5", "R=0.5", "No Intervention"), fill = c("steelblue4", "violetred4", "chartreuse4", "red", "pink"), col = c("steelblue4", "violetred4", "chartreuse4", "red", "pink"), cex = 0.75)
+
+
+
+#cumulative cases comparison
+#intervention: main = "Comparing the Model Interventions with Non-intervention",
+plot(cumsum(X_NY_p[c(1:91), 5]) ~ axis_NY_p[c(1:91)] , type = 'l', col = 'navy',  lwd = 3,  ylab = 'Cumulative Cases', xlab = "Time (Days)",  xlim = as.Date(c("2020-01-31", "2020-04-30")), ylim = c(0,50000)) #with intervetnion
+ lines(cumsum(X_NY_p_n[c(1:91), 5]) ~ axis_NY_p[c(1:91)] , col = 'red', lwd = 3) 
+ legend("topright", legend = c("With Interventions", "Current Situation","Without Interventions"), fill = c("navy", "chartreuse4" ,"red"), col = c("navy", "chartreuse4" ,"red"), cex = 0.5)
+ lines(cum.cases.italy[c(11:57), 2] ~ axis_NY_p[c(1:47)], col = 'chartreuse4', lwd = 3) 
+
+ #current italy if we are looking at the cumulative infectious cases that result from the model when the interventions are placed compared to when the interventions are not in place, we see that the interventions decrease gradually. When this is compared to the current cumulative cases in Italy, 
+ 
+```
+
