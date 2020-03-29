@@ -1,0 +1,462 @@
+---
+title: "Callibration"
+author: "Afia Amoako"
+date: '2020-03-29'
+output: html_document
+---
+
+##Introduction
+
+Analysis for the impact of intervention on COVID transmission is adapted from Wang, H., Wang, Z., Dong, Y., Chang, R., Xu, C., Yu, X., Zhang, S., Tsamlag, L., Shang, M., Huang, J., Wang, Y., Xu, G., Shen, T., Zhang, X., & Cai, Y. (2020). Phase-adjusted estimation of the number of Coronavirus Disease 2019 cases in Wuhan, China. Cell Discovery, 6(1), 1–8. https://doi.org/10.1038/s41421-020-0148-0
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#required package
+library(httr)
+library(tidyverse)
+library(lubridate)
+library(knitr)
+```
+
+#China
+##Model Replication: Replicating Authors information with China Data 
+
+Model Equation 
+dS/dt=-βS I/N
+dE/dt=+βS I/N-σE
+dI/dt=σE-γI
+dR/dt=γI
+β=R_0 γ
+
+
+To ensure that the model was reproducible, I replicated their initial estimation of the epidemic trend in Wuhan using their initial values. They set the total susceptible to the population of Wuhan City = 11 million. The initial exposed was 40 (Imai) and the exposed was set to 20 times the number in accordance to Read et al. They set the infection rate to 1/5.2 based on preliminary estimate of the latent period of 5.2 days (Li) They set recovery rate based on hospital admission period of 18 days to be conservative; hence γ was set to 1/18. They chose an R0 based on previously published values by Imai et al. Their timeline was set from December 1, 2019 to February 29, 2020. 
+```{r}
+#Assumption: 
+  #random mixing, person to person transmission, no difference in individual immunity, infectious show symptoms
+
+# Parameter values
+#initial variables per year
+N <- 11000000 #population in Wuhan
+I <- 40 #initial infected
+E <- 20 * I #estimated exposed
+R <- 0 #recovered
+S <- N-E-I-R
+alpha <- 1/5.2 #incubation period
+gamma <- 1/18 #recovery period -- used hospital adimission values
+duration <-18 #days 
+R0_1 <- 1.9 
+R0_2 <- 2.6
+R0_3 <- 3.1
+beta_1 <- R0_1/(duration)
+beta_2 <- R0_2/(duration)
+beta_3 <- R0_3/(duration)
+
+#time specification
+dt <- 1 #per day
+start <- 0
+end <- 90 #days
+time <- seq(start, end, by = dt)
+niter <- (end - start) / dt + 1
+s_date <- mdy("12-1-2019")
+e_date <- mdy("2-29-2020")
+axis_values <- seq(from = s_date, to = e_date, by = "day")
+
+#create table
+l <- 1 #index for beta_1: R0: 1.9
+m <- 2 #index for beta_2: R0: 2.6
+h <- 3 #index for beta_2: R0: 3.1
+
+X <- array(data = 0, dim = c(niter, 5, 3)) #created an array to catch the results
+colnames(X) <- c("S", "E", "I","R", "NewCases")
+#low
+X[1, 1, l] <- S #initial susuceptible population R0: 1.9
+X[1, 2, l] <- E #initial latent population R0: 1.9
+X[1, 3, l] <- I #initial infectious population R0: 1.9
+X[1, 4, l] <- R #initial recovered population R0: 1.9
+X[1, 5, l] <- I #newcases: This is an added colum to capture the numb er of people moving from exposed to infectious
+#medium
+X[1, 1, m] <- S #initial susuceptible population R0: 2.6
+X[1, 2, m] <- E #initial latent population R0: 2.6
+X[1, 3, m] <- I #initial infectious population R0: 2.6
+X[1, 4, m] <- R #initial recovered population R0: 2.6
+X[1, 5, m] <- I #newcases
+#high 
+X[1, 1, h] <- S #initial susuceptible population R0: 3.1
+X[1, 2, h] <- E #initial latent population R0: 3.1
+X[1, 3, h] <- I #initial infectious population R0: 3.1
+X[1, 4, h] <- R #initial recovered population R0: 3.1
+X[1, 5, h] <- I #newcases
+
+
+for (i in 2:niter) { 
+  #low: R0=1.9
+  X[i,1, l] <- X[i-1, 1, l] + dt * (-beta_1 * X[i-1,1,l] * (X[i-1,3,l]/sum(X[i-1, ,l]))) #S
+  X[i,2, l]<- X[i-1,2, l] + dt * (beta_1 * X[i-1,1,l] * (X[i-1,3,l]/sum(X[i-1, ,l])) - alpha * X[i-1,2,l]) #E
+  X[i,3, l] <- X[i-1,3, l] + dt * (alpha * X[i-1,2, l] - gamma * X[i-1,3, l])  #I 
+  X[i,4, l] <- X[i-1,4, l] + dt * (gamma * X[i-1,3, l]) #R
+  X[i,5, l] <- dt * (beta_1 * X[i-1,1,l] * (X[i-1,3,l]/sum(X[i-1, ,l])))
+  
+  #medium R0=2.6
+  X[i,1, m] <- X[i-1, 1, m] + dt * (-beta_2 * X[i-1,1,m] * (X[i-1,3,m]/sum(X[i-1, ,m])) ) #S
+  X[i,2, m]<- X[i-1,2, m] + dt * (beta_2 * X[i-1,1,m] * (X[i-1,3,m]/sum(X[i-1, ,m])) - alpha * X[i-1,2,m]) #E
+  X[i,3, m] <- X[i-1,3, m] + dt * (alpha * X[i-1,2, m] - gamma * X[i-1,3, m])  #I 
+  X[i,4, m] <- X[i-1,4, m] + dt * (gamma * X[i-1,3, m]) #R   
+  X[i,5, m] <- dt * (beta_2 * X[i-1,1,m] * (X[i-1,3,m]/sum(X[i-1, ,m])))
+  
+  #high R0=3.5
+  X[i,1, h] <- X[i-1, 1, h] + dt * (-beta_3 * X[i-1,1,h] * (X[i-1,3,h]/sum(X[i-1, ,h])) ) #S
+  X[i,2, h]<- X[i-1,2, h] + dt * (beta_3 * X[i-1,1,h] * (X[i-1,3,h]/sum(X[i-1, ,h])) - alpha * X[i-1,2,h]) #E
+  X[i,3, h] <- X[i-1,3, h] + dt * (alpha * X[i-1,2, h] - gamma * X[i-1,3, h])  #I 
+  X[i,4, h] <- X[i-1,4, h] + dt * (gamma * X[i-1,3, h]) #R
+  X[i, 5, h] <- dt * (beta_3 * X[i-1,1,h] * (X[i-1,3,h]/sum(X[i-1, ,h])))
+}
+
+low_beta <- as.data.frame(X[ , ,l])
+medium_beta <- as.data.frame(X[ , ,m])
+high_beta <- as.data.frame(X[ , ,h])
+
+#plot
+plot(X[, 3, l] ~axis_values, type = 'l', col = 'steelblue4',  lwd = 3, ylim=c(0,250000), ylab = 'N', xlab = "Time (year)", main = "Estimated Number of Cases With Different R0")
+  lines(medium_beta[, 3] ~ axis_values, col = 'violetred4', lwd = 3)
+  lines(high_beta[, 3] ~ axis_values, col = 'chartreuse4', lwd = 3)
+legend("topright", legend = c("R=1.9", "R=2.6", "R=3.1" ), fill = c("steelblue4", "violetred4", "chartreuse4"), col = c("steelblue4", "violetred4", "chartreuse4"), cex = 0.75)
+
+```
+
+
+##Model Replication: China Data with intervention
+```{r}
+#assumption: random mixing, person to person transmission, no difference in individual immunity, no deaths
+
+#authors used two different initial E values: 20 *I or 30* I to account for potential variation in the number of people exposed
+
+######Using E = 20*I########
+
+#R0 low = 0.9
+#Parameter Values
+N <- 11000000
+I <- 40 
+E_extended_p <- 20 * I
+R <- 0 
+S <- N-E_extended_p-I-R
+alpha <- 1/5.2 #incubation period
+gamma <- 1/18 #recovery period
+duration <-18 #days 
+# R0 and beta for different phases based on the impact of intervention to minimize transmission
+R0_1 <- 1.9 
+R0_2 <- 2.6
+R0_3 <- 3.1 
+R0_4 <- 0.9
+beta_1 <- R0_1/(duration)
+beta_2 <- R0_2/(duration)
+beta_3 <- R0_3/(duration)
+beta_4 <- R0_4/(duration)
+
+#time specification
+dt <- 1
+start <- 0
+extended_p <- 151
+time_extended_p <- seq(start, extended_p, by = dt)
+niter_extended_p <- (extended_p - start) / dt + 1
+s_date_extended_p <- mdy("12-1-2019")
+e_date_extended_p <- mdy("4-30-2020")
+axis_values_extended_p <- seq(from = s_date_extended_p, to = e_date_extended_p, by = "day")
+
+X_extended_p <- array(data = 0, dim = c(niter_extended_p, 4)) #created an array to catch the results
+colnames(X_extended_p) <- c("S", "E", "I","R")
+#low
+X_extended_p[1, 1] <- S #initial susuceptible population 
+X_extended_p[1, 2] <- E_extended_p #initial latent population 
+X_extended_p[1, 3] <- I #initial infectious population 
+X_extended_p[1, 4] <- R #initial recovered population 
+
+for (i in 2:niter_extended_p) { 
+  if(i <= 54) {
+  #phase 1 transmission with an R0 of 3.1 and no intervention (Dec 1 - January 23rd)
+  X_extended_p[i,1] <- X_extended_p[i-1, 1] + dt * (-beta_3 * X_extended_p[i-1,1] * (X_extended_p[i-1,3]/sum(X_extended_p[i-1,])))  #S
+  X_extended_p[i,2]<- X_extended_p[i-1,2] + dt * (beta_3 * X_extended_p[i-1,1] * (X_extended_p[i-1,3]/sum(X_extended_p[i-1,])) - alpha * X_extended_p[i-1,2]) #E
+  X_extended_p[i,3] <- X_extended_p[i-1,3] + dt * (alpha * X_extended_p[i-1,2] - gamma * X_extended_p[i-1,3])  #I 
+  X_extended_p[i,4] <- X_extended_p[i-1,4] + dt * (gamma * X_extended_p[i-1,3]) #R
+  }
+  else {
+    if ( i > 54 & i <= 64) { 
+  #phase 2 transmission with an R0 of 2.6 with quarantine measures (January 24 - February 2)
+ X_extended_p[i,1] <- X_extended_p[i-1, 1] + dt * (-beta_2 * X_extended_p[i-1,1] * (X_extended_p[i-1,3]/sum(X_extended_p[i-1,])))  #S
+  X_extended_p[i,2]<- X_extended_p[i-1,2] + dt * (beta_2 * X_extended_p[i-1,1] * (X_extended_p[i-1,3]/sum(X_extended_p[i-1,])) - alpha * X_extended_p[i-1,2]) #E
+  X_extended_p[i,3] <- X_extended_p[i-1,3] + dt * (alpha * X_extended_p[i-1,2] - gamma * X_extended_p[i-1,3])  #I 
+  X_extended_p[i,4] <- X_extended_p[i-1,4] + dt * (gamma * X_extended_p[i-1,3]) #R
+    }
+    else{
+      if ( i > 64 & i <=77){
+  #phase 3 transmission with an R0 of 1.9 stirct quarantine measures and new hospital (Febraury 2 - February 15)
+ X_extended_p[i,1] <- X_extended_p[i-1, 1] + dt * (-beta_1 * X_extended_p[i-1,1] * (X_extended_p[i-1,3]/sum(X_extended_p[i-1,])))  #S
+  X_extended_p[i,2]<- X_extended_p[i-1,2] + dt * (beta_1 * X_extended_p[i-1,1] * (X_extended_p[i-1,3]/sum(X_extended_p[i-1,])) - alpha * X_extended_p[i-1,2]) #E
+  X_extended_p[i,3] <- X_extended_p[i-1,3] + dt * (alpha * X_extended_p[i-1,2] - gamma * X_extended_p[i-1,3])  #I 
+  X_extended_p[i,4] <- X_extended_p[i-1,4] + dt * (gamma * X_extended_p[i-1,3]) #R
+      }
+      else {
+  #phase 3 transmission with an R0 of 0.9 to account for the lag in the impact of measures on slowing transmission (Febraury 16 onward)
+  X_extended_p[i,1] <- X_extended_p[i-1, 1] + dt * (-beta_4 * X_extended_p[i-1,1] * (X_extended_p[i-1,3]/sum(X_extended_p[i-1,])))  #S
+  X_extended_p[i,2]<- X_extended_p[i-1,2] + dt * (beta_4 * X_extended_p[i-1,1] * (X_extended_p[i-1,3]/sum(X_extended_p[i-1,])) - alpha * X_extended_p[i-1,2]) #E
+  X_extended_p[i,3] <- X_extended_p[i-1,3] + dt * (alpha * X_extended_p[i-1,2] - gamma * X_extended_p[i-1,3])  #I 
+  X_extended_p[i,4] <- X_extended_p[i-1,4] + dt * (gamma * X_extended_p[i-1,3]) #R
+      }
+  }
+  }
+}
+   
+X_extended_p <- as.data.frame(X_extended_p)
+X_extended_p$date <- axis_values_extended_p
+
+#R0 low = 0.5
+#Parameters
+N <- 11000000
+I <- 40 
+E_extended_p <- 20 * I
+R <- 0 
+S <- N-E_extended_p-I-R
+alpha <- 1/5.2 #incubation period
+gamma <- 1/18 #recovery period
+duration <-18 #days 
+# R0 and beta for different phases based on the impact of intervention to minimize transmission
+R0_1 <- 1.9 
+R0_2 <- 2.6
+R0_3 <- 3.1 
+R0_4 <- 0.5
+beta_1 <- R0_1/(duration)
+beta_2 <- R0_2/(duration)
+beta_3 <- R0_3/(duration)
+beta_4 <- R0_4/(duration)
+
+#time specification
+dt <- 1
+start <- 0
+extended_p <- 151
+time_extended_p <- seq(start, extended_p, by = dt)
+niter_extended_p <- (extended_p - start) / dt + 1
+s_date_extended_p <- mdy("12-1-2019")
+e_date_extended_p <- mdy("4-30-2020")
+axis_values_extended_p <- seq(from = s_date_extended_p, to = e_date_extended_p, by = "day")
+
+X_extended_p_l <- array(data = 0, dim = c(niter_extended_p, 4)) #created an array to catch the results
+colnames(X_extended_p_l) <- c("S", "E", "I","R")
+#low
+X_extended_p_l[1, 1] <- S #initial susuceptible population 
+X_extended_p_l[1, 2] <- E_extended_p #initial latent population 
+X_extended_p_l[1, 3] <- I #initial infectious population 
+X_extended_p_l[1, 4] <- R #initial recovered population 
+
+for (i in 2:niter_extended_p) { 
+  if(i <= 54) {
+    #phase 1 transmission with an R0 of 3.1 (Dec 1 - January 23rd)
+    X_extended_p_l[i,1] <- X_extended_p_l[i-1, 1] + dt * (-beta_3 * X_extended_p_l[i-1,1] * (X_extended_p_l[i-1,3]/sum(X_extended_p_l[i-1,])))  #S
+    X_extended_p_l[i,2]<- X_extended_p_l[i-1,2] + dt * (beta_3 * X_extended_p_l[i-1,1] * (X_extended_p_l[i-1,3]/sum(X_extended_p_l[i-1,])) - alpha * X_extended_p_l[i-1,2]) #E
+    X_extended_p_l[i,3] <- X_extended_p_l[i-1,3] + dt * (alpha * X_extended_p_l[i-1,2] - gamma * X_extended_p_l[i-1,3])  #I 
+    X_extended_p_l[i,4] <- X_extended_p_l[i-1,4] + dt * (gamma * X_extended_p_l[i-1,3]) #R
+  }
+  else {
+    if ( i > 54 & i <= 64) { 
+      #phase 2 transmission with an R0 of 2.6 (January 24 - February 2)
+      X_extended_p_l[i,1] <- X_extended_p_l[i-1, 1] + dt * (-beta_2 * X_extended_p_l[i-1,1] * (X_extended_p_l[i-1,3]/sum(X_extended_p_l[i-1,])))  #S
+      X_extended_p_l[i,2]<- X_extended_p_l[i-1,2] + dt * (beta_2 * X_extended_p_l[i-1,1] * (X_extended_p_l[i-1,3]/sum(X_extended_p_l[i-1,])) - alpha * X_extended_p_l[i-1,2]) #E
+      X_extended_p_l[i,3] <- X_extended_p_l[i-1,3] + dt * (alpha * X_extended_p_l[i-1,2] - gamma * X_extended_p_l[i-1,3])  #I 
+      X_extended_p_l[i,4] <- X_extended_p_l[i-1,4] + dt * (gamma * X_extended_p_l[i-1,3]) #R
+    }
+    else{
+      if ( i > 64 & i <=77){
+        #phase 3 transmission with an R0 of 1.9 (Febraury 2 - February 15)
+        X_extended_p_l[i,1] <- X_extended_p_l[i-1, 1] + dt * (-beta_1 * X_extended_p_l[i-1,1] * (X_extended_p_l[i-1,3]/sum(X_extended_p_l[i-1,])))  #S
+        X_extended_p_l[i,2]<- X_extended_p_l[i-1,2] + dt * (beta_1 * X_extended_p_l[i-1,1] * (X_extended_p_l[i-1,3]/sum(X_extended_p_l[i-1,])) - alpha * X_extended_p_l[i-1,2]) #E
+        X_extended_p_l[i,3] <- X_extended_p_l[i-1,3] + dt * (alpha * X_extended_p_l[i-1,2] - gamma * X_extended_p_l[i-1,3])  #I 
+        X_extended_p_l[i,4] <- X_extended_p_l[i-1,4] + dt * (gamma * X_extended_p_l[i-1,3]) #R
+      }
+      else {
+        #phase 3 transmission with an R0 of 0.5 (Febraury 16 onward)
+        X_extended_p_l[i,1] <- X_extended_p_l[i-1, 1] + dt * (-beta_4 * X_extended_p_l[i-1,1] * (X_extended_p_l[i-1,3]/sum(X_extended_p_l[i-1,])))  #S
+        X_extended_p_l[i,2]<- X_extended_p_l[i-1,2] + dt * (beta_4 * X_extended_p_l[i-1,1] * (X_extended_p_l[i-1,3]/sum(X_extended_p_l[i-1,])) - alpha * X_extended_p_l[i-1,2]) #E
+        X_extended_p_l[i,3] <- X_extended_p_l[i-1,3] + dt * (alpha * X_extended_p_l[i-1,2] - gamma * X_extended_p_l[i-1,3])  #I 
+        X_extended_p_l[i,4] <- X_extended_p_l[i-1,4] + dt * (gamma * X_extended_p_l[i-1,3]) #R
+      }
+    }
+  }
+}
+
+X_extended_p_l <- as.data.frame(X_extended_p_l)
+X_extended_p_l$date <- axis_values_extended_p
+
+
+#plot
+plot(X_extended_p[c(1:55), 3] ~ time_extended_p[c(1:55)] , type = 'l', col = 'steelblue4',  lwd = 3, ylim=c(0,80000), ylab = 'N', xlab = "Time (Days)", main = "Impact with Low E", xlim = c(0, 155))
+  lines(X_extended_p[c(56:65), 3] ~ time_extended_p[c(56:65)] , col = 'violetred4', lwd = 3)
+  lines(X_extended_p[c(66:78), 3] ~ time_extended_p[c(66:78)] , col = 'chartreuse4', lwd = 3)
+   lines(X_extended_p[c(79:152), 3] ~ time_extended_p[c(79:152)] , col = 'red', lwd = 3)
+   lines(X_extended_p_l[c(79:152), 3] ~ time_extended_p[c(79:152)] , col = 'pink', lwd = 3)
+legend("topright", legend = c("R=3.1", "R=2.6", "R=1.9", "R=0.9" , "R=0.5"), fill = c("steelblue4", "violetred4", "chartreuse4", "red", "pink"), col = c("steelblue4", "violetred4", "chartreuse4", "red", "pink"), cex = 0.75)
+
+
+######Using E = 30*I######
+
+#R0 low = 0.9
+#Parameter Values
+N <- 11000000
+I <- 40 
+E_extended_p <- 30 * I
+R <- 0 
+S <- N-E_extended_p-I-R
+alpha <- 1/5.2 #incubation period
+gamma <- 1/18 #recovery period
+duration <-18 #days 
+# R0 and beta for different phases based on the impact of intervention to minimize transmission
+R0_1 <- 1.9 
+R0_2 <- 2.6
+R0_3 <- 3.1 
+R0_4 <- 0.9
+beta_1 <- R0_1/(duration)
+beta_2 <- R0_2/(duration)
+beta_3 <- R0_3/(duration)
+beta_4 <- R0_4/(duration)
+
+#time specification
+dt <- 1
+start <- 0
+extended_p <- 151
+time_extended_p <- seq(start, extended_p, by = dt)
+niter_extended_p <- (extended_p - start) / dt + 1
+s_date_extended_p <- mdy("12-1-2019")
+e_date_extended_p <- mdy("4-30-2020")
+axis_values_extended_p <- seq(from = s_date_extended_p, to = e_date_extended_p, by = "day")
+
+X_h <- array(data = 0, dim = c(niter_extended_p, 4)) #created an array to catch the results
+colnames(X_h) <- c("S", "E", "I","R")
+#low
+X_h[1, 1] <- S #initial susuceptible population 
+X_h[1, 2] <- E_extended_p #initial latent population 
+X_h[1, 3] <- I #initial infectious population 
+X_h[1, 4] <- R #initial recovered population 
+
+for (i in 2:niter_extended_p) { 
+  if(i <= 54) {
+    #phase 1 transmission with an R0 of 3.1 (Dec 1 - January 23rd)
+    X_h[i,1] <- X_h[i-1, 1] + dt * (-beta_3 * X_h[i-1,1] * (X_h[i-1,3]/sum(X_h[i-1,])))  #S
+    X_h[i,2]<- X_h[i-1,2] + dt * (beta_3 * X_h[i-1,1] * (X_h[i-1,3]/sum(X_h[i-1,])) - alpha * X_h[i-1,2]) #E
+    X_h[i,3] <- X_h[i-1,3] + dt * (alpha * X_h[i-1,2] - gamma * X_h[i-1,3])  #I 
+    X_h[i,4] <- X_h[i-1,4] + dt * (gamma * X_h[i-1,3]) #R
+  }
+  else {
+    if ( i > 54 & i <= 64) { 
+      #phase 2 transmission with an R0 of 2.6 (January 24 - February 2)
+      X_h[i,1] <- X_h[i-1, 1] + dt * (-beta_2 * X_h[i-1,1] * (X_h[i-1,3]/sum(X_h[i-1,])))  #S
+      X_h[i,2]<- X_h[i-1,2] + dt * (beta_2 * X_h[i-1,1] * (X_h[i-1,3]/sum(X_h[i-1,])) - alpha * X_h[i-1,2]) #E
+      X_h[i,3] <- X_h[i-1,3] + dt * (alpha * X_h[i-1,2] - gamma * X_h[i-1,3])  #I 
+      X_h[i,4] <- X_h[i-1,4] + dt * (gamma * X_h[i-1,3]) #R
+    }
+    else{
+      if ( i > 64 & i <=77){
+        #phase 3 transmission with an R0 of 1.9 (Febraury 2 - February 15)
+        X_h[i,1] <- X_h[i-1, 1] + dt * (-beta_1 * X_h[i-1,1] * (X_h[i-1,3]/sum(X_h[i-1,])))  #S
+        X_h[i,2]<- X_h[i-1,2] + dt * (beta_1 * X_h[i-1,1] * (X_h[i-1,3]/sum(X_h[i-1,])) - alpha * X_h[i-1,2]) #E
+        X_h[i,3] <- X_h[i-1,3] + dt * (alpha * X_h[i-1,2] - gamma * X_h[i-1,3])  #I 
+        X_h[i,4] <- X_h[i-1,4] + dt * (gamma * X_h[i-1,3]) #R
+      }
+      else {
+        #phase 3 transmission with an R0 of 0.9 (Febraury 16 onward)
+        X_h[i,1] <- X_h[i-1, 1] + dt * (-beta_4 * X_h[i-1,1] * (X_h[i-1,3]/sum(X_h[i-1,])))  #S
+        X_h[i,2]<- X_h[i-1,2] + dt * (beta_4 * X_h[i-1,1] * (X_h[i-1,3]/sum(X_h[i-1,])) - alpha * X_h[i-1,2]) #E
+        X_h[i,3] <- X_h[i-1,3] + dt * (alpha * X_h[i-1,2] - gamma * X_h[i-1,3])  #I 
+        X_h[i,4] <- X_h[i-1,4] + dt * (gamma * X_h[i-1,3]) #R
+      }
+    }
+  }
+}
+
+X_h <- as.data.frame(X_h)
+X_h$date <- axis_values_extended_p
+
+#R0 low = 0.5
+#Parameters
+N <- 11000000
+I <- 40 
+E_extended_p <- 30 * I
+R <- 0 
+S <- N-E_extended_p-I-R
+alpha <- 1/5.2 #incubation period
+gamma <- 1/18 #recovery period
+duration <-18 #days 
+# R0 and beta for different phases based on the impact of intervention to minimize transmission
+R0_1 <- 1.9 
+R0_2 <- 2.6
+R0_3 <- 3.1 
+R0_4 <- 0.5
+beta_1 <- R0_1/(duration)
+beta_2 <- R0_2/(duration)
+beta_3 <- R0_3/(duration)
+beta_4 <- R0_4/(duration)
+
+#time specification
+dt <- 1
+start <- 0
+extended_p <- 151
+time_extended_p <- seq(start, extended_p, by = dt)
+niter_extended_p <- (extended_p - start) / dt + 1
+s_date_extended_p <- mdy("12-1-2019")
+e_date_extended_p <- mdy("4-30-2020")
+axis_values_extended_p <- seq(from = s_date_extended_p, to = e_date_extended_p, by = "day")
+
+X_l <- array(data = 0, dim = c(niter_extended_p, 4)) #created an array to catch the results
+colnames(X_l) <- c("S", "E", "I","R")
+#low
+X_l[1, 1] <- S #initial susuceptible population 
+X_l[1, 2] <- E_extended_p #initial latent population 
+X_l[1, 3] <- I #initial infectious population 
+X_l[1, 4] <- R #initial recovered population 
+
+for (i in 2:niter_extended_p) { 
+  if(i <= 54) {
+    #phase 1 transmission with an R0 of 3.1 (Dec 1 - January 23rd)
+    X_l[i,1] <- X_l[i-1, 1] + dt * (-beta_3 * X_l[i-1,1] * (X_l[i-1,3]/sum(X_l[i-1,])))  #S
+    X_l[i,2]<- X_l[i-1,2] + dt * (beta_3 * X_l[i-1,1] * (X_l[i-1,3]/sum(X_l[i-1,])) - alpha * X_l[i-1,2]) #E
+    X_l[i,3] <- X_l[i-1,3] + dt * (alpha * X_l[i-1,2] - gamma * X_l[i-1,3])  #I 
+    X_l[i,4] <- X_l[i-1,4] + dt * (gamma * X_l[i-1,3]) #R
+  }
+  else {
+    if ( i > 54 & i <= 64) { 
+      #phase 2 transmission with an R0 of 2.6 (January 24 - February 2)
+      X_l[i,1] <- X_l[i-1, 1] + dt * (-beta_2 * X_l[i-1,1] * (X_l[i-1,3]/sum(X_l[i-1,])))  #S
+      X_l[i,2]<- X_l[i-1,2] + dt * (beta_2 * X_l[i-1,1] * (X_l[i-1,3]/sum(X_l[i-1,])) - alpha * X_l[i-1,2]) #E
+      X_l[i,3] <- X_l[i-1,3] + dt * (alpha * X_l[i-1,2] - gamma * X_l[i-1,3])  #I 
+      X_l[i,4] <- X_l[i-1,4] + dt * (gamma * X_l[i-1,3]) #R
+    }
+    else{
+      if ( i > 64 & i <=77){
+        #phase 3 transmission with an R0 of 1.9 (Febraury 2 - February 15)
+        X_l[i,1] <- X_l[i-1, 1] + dt * (-beta_1 * X_l[i-1,1] * (X_l[i-1,3]/sum(X_l[i-1,])))  #S
+        X_l[i,2]<- X_l[i-1,2] + dt * (beta_1 * X_l[i-1,1] * (X_l[i-1,3]/sum(X_l[i-1,])) - alpha * X_l[i-1,2]) #E
+        X_l[i,3] <- X_l[i-1,3] + dt * (alpha * X_l[i-1,2] - gamma * X_l[i-1,3])  #I 
+        X_l[i,4] <- X_l[i-1,4] + dt * (gamma * X_l[i-1,3]) #R
+      }
+      else {
+        #phase 3 transmission with an R0 of 0.5 (Febraury 16 onward)
+        X_l[i,1] <- X_l[i-1, 1] + dt * (-beta_4 * X_l[i-1,1] * (X_l[i-1,3]/sum(X_l[i-1,])))  #S
+        X_l[i,2]<- X_l[i-1,2] + dt * (beta_4 * X_l[i-1,1] * (X_l[i-1,3]/sum(X_l[i-1,])) - alpha * X_l[i-1,2]) #E
+        X_l[i,3] <- X_l[i-1,3] + dt * (alpha * X_l[i-1,2] - gamma * X_l[i-1,3])  #I 
+        X_l[i,4] <- X_l[i-1,4] + dt * (gamma * X_l[i-1,3]) #R
+      }
+    }
+  }
+}
+
+X_l <- as.data.frame(X_l)
+X_l$date <- axis_values_extended_p
+
+#plot
+plot(X_h[c(1:55), 3] ~ time_extended_p[c(1:55)] , type = 'l', col = 'steelblue4',  lwd = 3, ylim=c(0,80000), ylab = 'N', xlab = "Time (Days)", main = "Impact with High E", xlim = c(0, 155))
+  lines(X_h[c(56:65), 3] ~ time_extended_p[c(56:65)] , col = 'violetred4', lwd = 3)
+  lines(X_h[c(66:78), 3] ~ time_extended_p[c(66:78)] , col = 'chartreuse4', lwd = 3)
+   lines(X_h[c(79:152), 3] ~ time_extended_p[c(79:152)] , col = 'red', lwd = 3)
+   lines(X_l[c(79:152), 3] ~ time_extended_p[c(79:152)] , col = 'pink', lwd = 3)
+legend("topright", legend = c("R=3.1", "R=2.6", "R=1.9", "R=0.9" , "R=0.5"), fill = c("steelblue4", "violetred4", "chartreuse4", "red", "pink"), col = c("steelblue4", "violetred4", "chartreuse4", "red", "pink"), cex = 0.75)
+
+```
+
+
