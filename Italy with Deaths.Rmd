@@ -80,8 +80,8 @@ I_italy <- 2 #ikmported cases from Italy
 E_italy <- 20 * I_italy #number potentially exposed
 R_italy <- 0 
 S_italy <- N_italy-E_italy-I_italy-R_italy
-br <- 7.6/1000
-mu_pop <- 10.7/1000
+br <- (7.6/1000)/365
+mu_pop <- (10.7/1000)/365
 mu_c <- 5/100
 alpha <- 1/5.6 #incubation period
 gamma <- 1/5 #recovery period
@@ -148,7 +148,7 @@ for (i in 2:niter_italy) {
   X_italy_d[i,3, l] <- X_italy_d[i-1,3, l] + dt * (alpha * X_italy_d[i-1,2, l] - (gamma + mu_pop) * X_italy_d[i-1,3, l] - mu_c * X_italy_d[i-1,3, l])  #I 
   X_italy_d[i,4, l] <- X_italy_d[i-1,4, l] + dt * (gamma * X_italy_d[i-1,3, l] - mu_pop * X_italy_d[i-1,4, l]) #R
   X_italy_d[i,5, l] <- dt * (alpha * X_italy_d[i-1,2, l]) #new cases added 
-  X_italy_d[i,6, l] <- dt * (mu_c * X_italy_d[i-1,3, l])
+  X_italy_d[i,6, l] <- dt * ((mu_c * X_italy_d[i-1,3, l]) + (mu_pop * (X_italy_d[i-1,1,l] + X_italy_d[i-1,2,l] + X_italy_d[i-1,3,l] + X_italy_d[i-1,4, l])))
   
   #medium
   X_italy_d[i,1, m] <- X_italy_d[i-1, 1, m] + dt * (-beta_2 * X_italy_d[i-1,1,m] * X_italy_d[i-1,3,m] - mu_pop * X_italy_d[i-1,1,m] + br * sum(X_italy_d[i-1, ,m]))  #S
@@ -156,7 +156,7 @@ for (i in 2:niter_italy) {
   X_italy_d[i,3, m] <- X_italy_d[i-1,3, m] + dt * (alpha * X_italy_d[i-1,2, m] - (gamma + mu_pop) * X_italy_d[i-1,3, m] - mu_c * X_italy_d[i-1,3, m])  #I 
   X_italy_d[i,4, m] <- X_italy_d[i-1,4, m] + dt * (gamma * X_italy_d[i-1,3, m] - mu_pop * X_italy_d[i-1,4, m]) #R
   X_italy_d[i,5, m] <- dt * (alpha * X_italy_d[i-1,2, m]) #new cases added 
-  X_italy_d[i,6, m] <- dt * ( mu_c * X_italy_d[i-1,3, m]  )
+   X_italy_d[i,6, m] <- dt * ((mu_c * X_italy_d[i-1,3, m]) + (mu_pop * (X_italy_d[i-1,1,m] + X_italy_d[i-1,2,m] + X_italy_d[i-1,3,m] + X_italy_d[i-1,4, m])))
    
   #high
   X_italy_d[i,1, h] <- X_italy_d[i-1, 1, h] + dt * (-beta_3 * X_italy_d[i-1,1,h] * X_italy_d[i-1,3,h] - mu_pop * X_italy_d[i-1,1,h] + br * sum(X_italy_d[i-1, ,m]))  #S
@@ -164,7 +164,7 @@ for (i in 2:niter_italy) {
   X_italy_d[i,3, h] <- X_italy_d[i-1,3, h] + dt * (alpha * X_italy_d[i-1,2, h] - (gamma + mu_pop) * X_italy_d[i-1,3, h] - mu_c * X_italy_d[i-1,3, h])  #I 
   X_italy_d[i,4, h] <- X_italy_d[i-1,4, h] + dt * (gamma * X_italy_d[i-1,3, h] - mu_pop * X_italy_d[i-1,4, h]) #R
   X_italy_d[i,5, h] <- dt * (alpha * X_italy_d[i-1,2, h]) #new cases added 
-  X_italy_d[i,6, h] <- dt *  (mu_c * X_italy_d[i-1,3, h]  )
+    X_italy_d[i,6, h] <- dt * ((mu_c * X_italy_d[i-1,3, h]) + (mu_pop * (X_italy_d[i-1,1,h] + X_italy_d[i-1,2,h] + X_italy_d[i-1,3,h] + X_italy_d[i-1,4, h])))
   
 }
 
