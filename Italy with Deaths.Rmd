@@ -1,0 +1,215 @@
+---
+title: "Italy with Deaths"
+author: "Afia Amoako"
+date: '2020-03-31'
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+#required package
+library(httr)
+library(tidyverse)
+library(lubridate)
+library(knitr)
+```
+
+
+##Introduction
+
+Analysis for the impact of intervention on COVID transmission is adapted from Wang, H., Wang, Z., Dong, Y., Chang, R., Xu, C., Yu, X., Zhang, S., Tsamlag, L., Shang, M., Huang, J., Wang, Y., Xu, G., Shen, T., Zhang, X., & Cai, Y. (2020). Phase-adjusted estimation of the number of Coronavirus Disease 2019 cases in Wuhan, China. Cell Discovery, 6(1), 1–8. https://doi.org/10.1038/s41421-020-0148-0
+
+
+###Importing Data 
+```{r}
+COVID <- read.csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv")
+head(COVID, 10)
+summary(COVID)
+
+COVID_deaths <- read.csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv")
+head(COVID_deaths)
+summary(COVID_deaths)
+
+#things to do, downloads deaths, add death to all models, plot deaths 
+```
+
+###Cleaning Italy Table 
+```{r}
+#analysis up to 28th march 
+
+#CASES
+#cleaning removing province, longititude and latitude 
+COVID.clean <- COVID[ ,-c(1,3,4)]
+#subset Italy cumulative cases
+COVID.italy <- COVID.clean %>% filter(Country.Region == "Italy")
+#creating cumulative cases table for  Italy 
+start_date <- mdy("1-22-2020")
+end_date <- mdy("3-31-2020")
+intervals <- seq(from = start_date, to=end_date, by = "day")
+cases <- as.numeric(COVID.italy[1, -1])
+cum.cases.italy <- as.data.frame(cbind(Date = intervals, Cases = cases))
+cum.cases.italy$Date <- as.Date(cum.cases.italy$Date, origin ="1970-01-01")
+
+
+
+#DEATHS
+COVID.clean.deaths <- COVID_deaths[ ,-c(1,3,4)]
+#subset Italy cumulative deaths
+COVID.italy.deaths <- COVID.clean.deaths %>% filter(Country.Region == "Italy")
+#creating cumulative cases table for  Italy 
+deaths <- as.numeric(COVID.italy.deaths[1, -1])
+cum.deaths.italy <- as.data.frame(cbind(Date = intervals, Deaths = deaths))
+cum.deaths.italy$Date <- as.Date(cum.deaths.italy$Date, origin ="1970-01-01")
+
+#plot.cumulative cases and Deaths 
+plot(cum.cases.italy$Date, cum.cases.italy$Cases, type = "l", lwd = "3", col = "navy", main = "Cumulative Cases in Italy", xlab = "Date", ylab = "Cases", ylim = c(0,100000))
+lines(cum.deaths.italy$Date, cum.deaths.italy$Deaths, lwd = "3",   col = "chartreuse4")
+legend("topleft", legend = c( "Cases","Deaths"), fill = c("navy", "chartreuse4"), col = c("navy", "chartreuse4"), cex = 0.5)
+```
+
+#Italy
+##Model Application: Estimating the potential number of infectious people based on different R0 values
+```{r}
+#assumption: random mixing, person to person transmission, no difference in individual immunity, no deaths
+
+# Parameter values
+#initial variables per year
+N_italy <- 60480000 #population of Italy
+I_italy <- 2 #ikmported cases from Italy
+E_italy <- 20 * I_italy #number potentially exposed
+R_italy <- 0 
+S_italy <- N_italy-E_italy-I_italy-R_italy
+br <- 7.6/1000
+mu_pop <- 10.7/1000
+mu_c <- 5/100
+alpha <- 1/5.6 #incubation period
+gamma <- 1/5 #recovery period
+duration <- 5 #days 
+
+# R0 and beta for different phases based on the impact of intervention to minimize transmission
+R0_1 <- 1.5 
+R0_2 <- 2.6
+R0_3 <- 3.5 #without any intervention
+R0_4 <- 0.9
+beta_1 <- R0_1/(N_italy*duration)
+beta_2 <- R0_2/(N_italy*duration)
+beta_3 <- R0_3/(N_italy*duration)
+beta_4 <- R0_4/(N_italy*duration)
+
+#time specification
+dt <- 1
+start <- 0
+end_italy <- 40
+time_italy <- seq(start, end_italy, by = dt)
+niter_italy <- (end_italy - start) / dt + 1
+s_date_italy <- mdy("1-31-2020") #first cases reported in Rome
+e_date_italy <- mdy("3-11-2020") #last up to date results
+axis_italy <- seq(from = s_date_italy, to = e_date_italy, by = "day")
+
+
+#create table
+l <- 1 #index for beta_1: R0: 1.9
+m <- 2 #index for beta_2: R0: 2.6
+h <- 3 #index for beta_2: R0: 3.5
+
+X_italy_d <- array(data = 0, dim = c(niter_italy, 6, 3)) #created an array to catch the results
+colnames(X_italy_d) <- c("S", "E", "I","R", "New Case", "Total Deaths")
+#low
+X_italy_d[1, 1, l] <- S_italy #initial susuceptible population R0: 1.9
+X_italy_d[1, 2, l] <- E_italy #initial latent population R0: 1.9
+X_italy_d[1, 3, l] <- I_italy #initial infectious population R0: 1.9
+X_italy_d[1, 4, l] <- R_italy #initial recovered population R0: 1.9
+X_italy_d[1, 5, l] <- I_italy #initial infectious population R0: 1.9: using this row to count the number of new cases for cumulative incidence calculation.
+X_italy_d[1, 6, l] <- 0 #initial dead
+
+#medium
+X_italy_d[1, 1, m] <- S_italy #initial susuceptible population R0: 2.6
+X_italy_d[1, 2, m] <- E_italy #initial latent population R0: 2.6
+X_italy_d[1, 3, m] <- I_italy #initial infectious population R0: 2.6
+X_italy_d[1, 4, m] <- R_italy #initial recovered population R0: 2.6
+X_italy_d[1, 5, m] <- I_italy #initial infectious population R0: 2.6: using this row to count the number of new cases for cumulative incidence calculation.
+X_italy_d[1, 6, m] <- 0 #initial dead
+
+
+#high 
+X_italy_d[1, 1, h] <- S_italy #initial susuceptible population R0: 3.5
+X_italy_d[1, 2, h] <- E_italy #initial latent population R0: 3.5
+X_italy_d[1, 3, h] <- I_italy #initial infectious population R0: 3.5
+X_italy_d[1, 4, h] <- R_italy #initial recovered population R0: 3.5
+X_italy_d[1, 5, h] <- I_italy #initial infectious population R0: 3.5: using this row to count the number of new cases for cumulative incidence calculation.
+X_italy_d[1, 6, h] <- 0 #initial dead
+
+
+for (i in 2:niter_italy) { 
+  #low
+  X_italy_d[i,1, l] <- X_italy_d[i-1, 1, l] + dt * (-beta_1 * X_italy_d[i-1,1,l] * X_italy_d[i-1,3,l] - mu_pop * X_italy_d[i-1,1,l] + br * sum(X_italy_d[i-1,c(1:4) ,l]) )  #S
+  X_italy_d[i,2, l]<- X_italy_d[i-1,2, l] + dt * (beta_1 * X_italy_d[i-1,1,l] *  X_italy_d[i-1,3,l] - (alpha + mu_pop) * X_italy_d[i-1,2,l]) #E
+  X_italy_d[i,3, l] <- X_italy_d[i-1,3, l] + dt * (alpha * X_italy_d[i-1,2, l] - (gamma + mu_pop) * X_italy_d[i-1,3, l] - mu_c * X_italy_d[i-1,3, l])  #I 
+  X_italy_d[i,4, l] <- X_italy_d[i-1,4, l] + dt * (gamma * X_italy_d[i-1,3, l] - mu_pop * X_italy_d[i-1,4, l]) #R
+  X_italy_d[i,5, l] <- dt * (alpha * X_italy_d[i-1,2, l]) #new cases added 
+  X_italy_d[i,6, l] <- dt * (mu_c * X_italy_d[i-1,3, l])
+  
+  #medium
+  X_italy_d[i,1, m] <- X_italy_d[i-1, 1, m] + dt * (-beta_2 * X_italy_d[i-1,1,m] * X_italy_d[i-1,3,m] - mu_pop * X_italy_d[i-1,1,m] + br * sum(X_italy_d[i-1, ,m]))  #S
+  X_italy_d[i,2, m]<- X_italy_d[i-1,2, m] + dt * (beta_2 * X_italy_d[i-1,1,m] *  X_italy_d[i-1,3,m] - (alpha + mu_pop) * X_italy_d[i-1,2,m]) #E
+  X_italy_d[i,3, m] <- X_italy_d[i-1,3, m] + dt * (alpha * X_italy_d[i-1,2, m] - (gamma + mu_pop) * X_italy_d[i-1,3, m] - mu_c * X_italy_d[i-1,3, m])  #I 
+  X_italy_d[i,4, m] <- X_italy_d[i-1,4, m] + dt * (gamma * X_italy_d[i-1,3, m] - mu_pop * X_italy_d[i-1,4, m]) #R
+  X_italy_d[i,5, m] <- dt * (alpha * X_italy_d[i-1,2, m]) #new cases added 
+  X_italy_d[i,6, m] <- dt * ( mu_c * X_italy_d[i-1,3, m]  )
+   
+  #high
+  X_italy_d[i,1, h] <- X_italy_d[i-1, 1, h] + dt * (-beta_3 * X_italy_d[i-1,1,h] * X_italy_d[i-1,3,h] - mu_pop * X_italy_d[i-1,1,h] + br * sum(X_italy_d[i-1, ,m]))  #S
+  X_italy_d[i,2, h]<- X_italy_d[i-1,2, h] + dt * (beta_3 * X_italy_d[i-1,1,h] *  X_italy_d[i-1,3,h] - (alpha + mu_pop) * X_italy_d[i-1,2,h]) #E
+  X_italy_d[i,3, h] <- X_italy_d[i-1,3, h] + dt * (alpha * X_italy_d[i-1,2, h] - (gamma + mu_pop) * X_italy_d[i-1,3, h] - mu_c * X_italy_d[i-1,3, h])  #I 
+  X_italy_d[i,4, h] <- X_italy_d[i-1,4, h] + dt * (gamma * X_italy_d[i-1,3, h] - mu_pop * X_italy_d[i-1,4, h]) #R
+  X_italy_d[i,5, h] <- dt * (alpha * X_italy_d[i-1,2, h]) #new cases added 
+  X_italy_d[i,6, h] <- dt *  (mu_c * X_italy_d[i-1,3, h]  )
+  
+}
+
+low_beta_italy_d <- as.data.frame(X_italy_d[ , ,l])
+medium_beta_italy_d <- as.data.frame(X_italy_d[ , ,m])
+high_beta_italy_d <- as.data.frame(X_italy_d[ , ,h])
+high_beta_italy_d$Date <- axis_italy
+medium_beta_italy_d$Date <- axis_italy
+low_beta_italy_d$Date <- axis_italy
+
+
+#"Number of People Infectious in  Italy with varying R0 values",
+plot(high_beta_italy_d$I ~ axis_italy, type = 'l',  xlab = "Date", ylab = "Number of People Infectious", col = 'navy', lwd = 3, ylim = c(0,5000))
+ lines(medium_beta_italy_d$I ~ axis_italy, col = 'red', lwd = 3)
+ lines(low_beta_italy_d$I ~ axis_italy, col = 'pink', lwd = 3)
+ legend("topleft", legend = c( "Model R: 3.5","Model R:2.6", "Model R: 1.5"), fill = c("navy", "red", "pink"), col = c("navy", "red", "pink"), cex = 0.5)
+
+#Number of People Dying 
+plot(high_beta_italy_d$`Total Deaths` ~ axis_italy, type = 'l',  xlab = "Date", ylab = "Number of People Dead", col = 'navy', lwd = 3)
+ lines(medium_beta_italy_d$`Total Deaths` ~ axis_italy, col = 'red', lwd = 3)
+ lines(low_beta_italy_d$`Total Deaths` ~ axis_italy, col = 'pink', lwd = 3)
+ legend("topleft", legend = c( "Model R: 3.5","Model R:2.6", "Model R: 1.5"), fill = c("navy", "red", "pink"), col = c("navy", "red", "pink"), cex = 0.5)
+ 
+ 
+  
+#"Comparing Modeled Cumulative Cases in Italy with varying R0 values to current cases",
+
+plot(cum.cases.italy[c(10:50), 1], cum.cases.italy[c(10:50), 2], type = 'l', xlab = "Date", ylab = "Cumulative Cases", col = "chartreuse4", lwd = 3)
+ lines(cumsum(low_beta_italy_d$`New Case`) ~ axis_italy, col = "pink", lwd = 3)
+ lines(cumsum(medium_beta_italy_d$`New Case`) ~ axis_italy, col = 'red', lwd = 3)
+ lines(cumsum(high_beta_italy_d$`New Case`) ~ axis_italy, col = "navy", lwd = 3)
+ legend("topleft", legend = c("Current Cases \n in Italy", "Model R: 3.5","Model R:2.6", "Model R:1.5"), fill = c("chartreuse4", "navy", "red", "pink"), col = c("chartreuse4", "navy", "red", "pink"), cex = 0.5)
+  #caption to see how my model can relate to what is currently seen in italy, I used the model to calculate the number of new infectious people occuring based on the number of people moving into the I column and compared this to the current information on cumulative cases. This will allow me to compare with current cases. 
+ 
+ #"Comparing Modeled Cumulative Cases in Italy with varying R0 values to current cases",
+plot(cum.deaths.italy[c(10:50), 1], cum.deaths.italy[c(10:50), 2], type = 'l', xlab = "Date", ylab = "Cumulative Deaths", col = "chartreuse4", lwd = 3)
+ lines(cumsum(low_beta_italy_d$`Total Deaths`) ~ axis_italy, col = "pink", lwd = 3)
+ lines(cumsum(medium_beta_italy_d$`Total Deaths`) ~ axis_italy, col = 'red', lwd = 3)
+ lines(cumsum(high_beta_italy_d$`Total Deaths`) ~ axis_italy, col = "navy", lwd = 3)
+ legend("topleft", legend = c("Current Deaths \n in Italy", "Model R: 3.5","Model R:2.6", "Model R:1.5"), fill = c("chartreuse4", "navy", "red", "pink"), col = c("chartreuse4", "navy", "red", "pink"), cex = 0.5)
+ 
+
+ 
+
+
+ 
+#after graphing, it seem that 3.5 is actually a better growth rate because it is similar to the italy number. Assuming that italy is only counting those who are presenting for testing, tends to be those with some symptoms and this is not including those who are incubating, so could be under estimation. Thus used the I to represent the symptomatic and calculated cumulative cases by the number of cases moving from E to I each time step and then taking the  cumulative sum. 3.5 is a good R0 to start with. 
+```
