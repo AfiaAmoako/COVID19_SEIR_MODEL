@@ -23,14 +23,16 @@ library(knitr)
 ##Model Replication: Replicating Authors information with China Data 
 
 Model Equation 
-dS/dt=-βS I/N
-dE/dt=+βS I/N-σE
-dI/dt=σE-γI
-dR/dt=γI
-β=R_0 γ
-
+$$\frac{dS}{dt} = - \beta S \frac{I}{N} $$ 
+$$\frac{dE}{dt} = + \beta S \frac{I}{N}  - \sigma E $$
+$$\frac{dI}{dt} = \sigma E - \gamma I  $$
+$$\frac{dR}{dt} =  \gamma I  $$
+$$\beta =  R_0 \gamma$$
 
 To ensure that the model was reproducible, I replicated their initial estimation of the epidemic trend in Wuhan using their initial values. They set the total susceptible to the population of Wuhan City = 11 million. The initial exposed was 40 (Imai) and the exposed was set to 20 times the number in accordance to Read et al. They set the infection rate to 1/5.2 based on preliminary estimate of the latent period of 5.2 days (Li) They set recovery rate based on hospital admission period of 18 days to be conservative; hence γ was set to 1/18. They chose an R0 based on previously published values by Imai et al. Their timeline was set from December 1, 2019 to February 29, 2020. 
+
+
+##Estimating the number of infectious people using different R0 values
 ```{r}
 #Assumption: 
   #random mixing, person to person transmission, no difference in individual immunity, infectious show symptoms
