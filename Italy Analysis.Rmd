@@ -1,9 +1,11 @@
 ---
-title: "Italy Analysis"
+title: "Italy_Analysis"
 author: "Afia Amoako"
 date: '2020-03-29'
-output: html_document
-editor_options: 
+output:
+  word_document: default
+  html_document: default
+editor_options:
   chunk_output_type: console
 ---
 
@@ -134,7 +136,7 @@ plot(first_beta_italy$I ~ axis_italy, type = 'l',  xlab = "Date", ylab = "Number
 
  
 #"Comparing Modeled Cumulative Cases in Italy with varying R0 values to current cases",
-plot(cum.cases.italy[c(10:50), 1], cum.cases.italy[c(10:50), 2], type = 'l', xlab = "Date", ylab = "Cumulative Cases", col = "chartreuse4", lwd = 3, main = "Comparing Modeled Cumulative Cases \n in Italy with varying R0 values")
+plot(cum.cases.italy[c(10:50), 1], cum.cases.italy[c(10:50), 2], type = 'l', xlab = "Date", ylab = "Cumulative Cases", col = "chartreuse4", lwd = 3, main = "Model Validation of \n varying R0 values ")
  lines(cumsum(first_beta_italy$`New Case`) ~ axis_italy, col = "pink", lwd = 3)
  lines(cumsum(second_beta_italy$`New Case`) ~ axis_italy, col = 'red', lwd = 3)
   legend("topleft", legend = c("Cumulative Cases \n in Italy", "Model R: 3.1","Model R:3.5"), fill = c("chartreuse4", "pink",  "red"), col = c("chartreuse4", "pink",  "red"), cex = 0.85, box.lty = 0)
@@ -178,11 +180,11 @@ beta_4 <- R0_4/(N_italy * duration)
 #time specification
 dt <- 1
 start <- 0
-end_italy_p <- 90 #days
+end_italy_p <- 151 #days
 time_italy_p <- seq(start, end_italy_p, by = dt)
 niter_italy_p <- (end_italy_p - start) / dt + 1
 s_date_italy_p <- mdy("1-31-2020")
-e_date_italy_p <- mdy("4-30-2020")
+e_date_italy_p <- mdy("6-30-2020")
 axis_italy_p <- seq(from = s_date_italy_p, to = e_date_italy_p, by = "day")
 
 
@@ -234,6 +236,7 @@ for (i in 2:niter_italy_p) {
   }
 
 X_italy_p <- as.data.frame(X_italy_p)
+cumsum(X_italy_p$`New Cases`)
 X_italy_p$date <- axis_italy_p
 
   
@@ -257,11 +260,11 @@ beta_3 <- R0_3/(N_italy * duration)
 #time specification
 dt <- 1
 start <- 0
-end_italy_p_n <- 90 #days
+end_italy_p_n <- 151 #days
 time_italy_p_n <- seq(start, end_italy_p_n, by = dt)
 niter_italy_p_n <- (end_italy_p_n - start) / dt + 1
 s_date_italy_p_n <- mdy("1-31-2020")
-e_date_italy_p_n <- mdy("4-30-2020")
+e_date_italy_p_n <- mdy("6-30-2020")
 axis_italy_p_n <- seq(from = s_date_italy_p_n, to = e_date_italy_p_n, by = "day")
 
 X_italy_p_n <- array(data = 0, dim = c(niter_italy_p_n, 5)) #created an array to catch the results
@@ -283,27 +286,28 @@ for(i in 2:niter_italy_p_n) {
   }
 
 X_italy_p_n <- as.data.frame(X_italy_p_n)
+cumsum(X_italy_p_n$`New Cases`)
 X_italy_p_n$date <- axis_italy_p
   
 
 ###########plots#################
 
 #plot: number of new cases main = "Impact of Intervention on the Number of Infectious People Each Day",
-plot(X_italy_p[c(1:24), 3] ~ axis_italy_p[c(1:24)] ,  col = 'steelblue4',  lwd = 3,  type = 'l', ylab = "Number of People Infectious", xlab = "Time (Days)",  xlim = as.Date(c("2020-01-31", "2020-04-30")), ylim = c(0,20000), main = "A")
+plot(X_italy_p[c(1:24), 3] ~ axis_italy_p[c(1:24)] ,  col = 'steelblue4',  lwd = 3,  type = 'l', ylab = "Number of People Infectious", xlab = "Time (Days)",  xlim = as.Date(c("2020-01-31", "2020-06-30")), ylim = c(0,10000), main = "A")
   lines(X_italy_p[c(24:41), 3] ~ axis_italy_p[c(24:41)] , col = 'violetred4', lwd = 3)
   lines(X_italy_p[c(41:55), 3] ~ axis_italy_p[c(41:55)], col = 'gold', lwd = 3)
-  lines(X_italy_p[c(55:91), 3] ~ axis_italy_p[c(55:91)], col = 'red', lwd = 3)
-  lines(X_italy_p_n[c(1:91), 3] ~ axis_italy_p[c(1:91)] , col = 'navy', lwd = 3) #if we are assuming that transmission continued at a high rate
-legend("topleft", legend = c("R=3.5", "R=2.6", "R=1.5", "R=0.5", "No Intervention"), fill = c("steelblue4", "violetred4", "gold", "red", "navy"), col = c("steelblue4", "violetred4", "gold", "red", "navy"), cex = 1, box.lty = 0)
+  lines(X_italy_p[c(55:152), 3] ~ axis_italy_p[c(55:152)], col = 'red', lwd = 3)
+  lines(X_italy_p_n[c(1:152), 3] ~ axis_italy_p[c(1:152)] , col = 'navy', lwd = 3) #if we are assuming that transmission continued at a high rate
+legend("topright", legend = c("R=3.5", "R=2.6", "R=1.5", "R=0.5", "No Intervention"), fill = c("steelblue4", "violetred4", "gold", "red", "navy"), col = c("steelblue4", "violetred4", "gold", "red", "navy"), cex = 0.75, box.lty = 0)
 
 #cumulative cases comparison
 #without intervention
-plot(cumsum(X_italy_p_n[c(1:91), 5]) ~ axis_italy_p[c(1:91)],  col = 'navy',  lwd = 3,  type = 'l', ylab = 'Cumulative Cases', xlab = "Time (Days)",  xlim = as.Date(c("2020-01-31", "2020-04-30")), ylim = c(0,150000), main = "B") 
+plot(cumsum(X_italy_p_n[c(1:152), 5]) ~ axis_italy_p[c(1:152)],  col = 'navy',  lwd = 3,  type = 'l', ylab = 'Cumulative Cases', xlab = "Time (Days)",  xlim = as.Date(c("2020-01-31", "2020-06-30")), ylim = c(0,150000), main = "B") 
 #current situation
-lines(cum.cases.italy[c(10:73), 2] ~ axis_italy_p[c(1:64)], col = 'chartreuse4', lwd = 3) 
+lines(cum.cases.italy[c(10:77), 2] ~ axis_italy_p[c(1:68)], col = 'chartreuse4', lwd = 3) 
 #with intervetnion
- lines(cumsum(X_italy_p[c(1:91), 5]) ~ axis_italy_p[c(1:91)],  col = 'red', lwd = 3) 
-legend("topleft", legend = c("Without Interventions", "Current Situation", "With Interventions"), fill = c("navy", "chartreuse4", "red"), col = c("navy", "chartreuse4", "red"), cex = 1, box.lty = 0)
+ lines(cumsum(X_italy_p[c(1:152), 5]) ~ axis_italy_p[c(1:152)],  col = 'red', lwd = 3) 
+legend("topright", legend = c("Without Interventions", "Current Situation", "With Interventions"), fill = c("navy", "chartreuse4", "red"), col = c("navy", "chartreuse4", "red"), cex = 0.75, box.lty = 0)
 
  #current italy if we are looking at the cumulative infectious cases that result from the model when the interventions are placed compared to when the interventions are not in place, we see that the interventions decrease gradually. When this is compared to the current cumulative cases in Italy, 
  
@@ -344,11 +348,11 @@ beta_4 <- R0_4/(N_italy * duration)
 #time specification
 dt <- 1
 start <- 0
-end_italy_p <- 90 #days
+end_italy_p <- 151 #days
 time_italy_p <- seq(start, end_italy_p, by = dt)
 niter_italy_p <- (end_italy_p - start) / dt + 1
 s_date_italy_p <- mdy("1-31-2020")
-e_date_italy_p <- mdy("4-30-2020")
+e_date_italy_p <- mdy("6-30-2020")
 axis_italy_p <- seq(from = s_date_italy_p, to = e_date_italy_p, by = "day")
 
 
@@ -400,37 +404,37 @@ for (i in 2:niter_italy_p) {
 }
 
 X_italy_p_e<- as.data.frame(X_italy_p_e)
+X_italy_p_e$Date <- axis_italy_p
 max(X_italy_p_e$I)
 
 
 
 ###########plots#################
 
-par(mfrow = c(1, 2))
 #plot: number of new cases main = "Impact of Intervention on the Number of Infectious People Each Day",
-plot(X_italy_p_e[c(1:18), 3] ~ axis_italy_p[c(1:18)] , type = 'l', col = 'steelblue4',  lwd = 3,  ylab = "Number of People Infectious", xlab = "Time (Days)",  xlim = as.Date(c("2020-01-31", "2020-04-30")), ylim = c(0,20000), main = "A")
+plot(X_italy_p_e[c(1:18), 3] ~ axis_italy_p[c(1:18)] , type = 'l', col = 'steelblue4',  lwd = 3,  ylab = "Number of People Infectious", xlab = "Time (Days)",  xlim = as.Date(c("2020-01-31", "2020-06-30")), ylim = c(0,10000), main = "Number of People Infectious \n with Interventions")
 lines(X_italy_p_e[c(18:34), 3] ~ axis_italy_p[c(18:34)] , col = 'violetred4', lwd = 3)
 lines(X_italy_p_e[c(34:48), 3] ~ axis_italy_p[c(34:48)], col = 'gold', lwd = 3)
-lines(X_italy_p_e[c(48:91), 3] ~ axis_italy_p[c(48:91)], col = 'red', lwd = 3)
+lines(X_italy_p_e[c(48:152), 3] ~ axis_italy_p[c(48:152)], col = 'red', lwd = 3)
 lines(X_italy_p[c(24:41), 3] ~ axis_italy_p[c(24:41)] , col = 'violetred4', lwd = 3)
 lines(X_italy_p[c(41:55), 3] ~ axis_italy_p[c(41:55)], col = 'gold', lwd = 3)
-lines(X_italy_p[c(55:91), 3] ~ axis_italy_p[c(55:91)], col = 'red', lwd = 3)
-lines(X_italy_p_n[c(1:91), 3] ~ axis_italy_p[c(1:91)] , col = 'navy', lwd = 3) #if we are assuming that transmission continued at a high rate
+lines(X_italy_p[c(55:152), 3] ~ axis_italy_p[c(55:152)], col = 'red', lwd = 3)
+lines(X_italy_p_n[c(1:152), 3] ~ axis_italy_p[c(1:152)] , col = 'navy', lwd = 3) #if we are assuming that transmission continued at a high rate
 lines(X_italy_p[c(1:24), 3] ~ axis_italy_p[c(1:24)] ,  col = 'steelblue4',  lwd = 3)
 
-legend("topright", legend = c("R=3.5", "R=2.6", "R=1.5", "R=0.5", "No Intervention"), fill = c("steelblue4", "violetred4", "gold", "red", "navy"), col = c("steelblue4", "violetred4", "gold", "red", "navy"), cex = 0.5, box.lty = 0)
+legend("topright", legend = c("R=3.5", "R=2.6", "R=1.5", "R=0.5", "No Intervention"), fill = c("steelblue4", "violetred4", "gold", "red", "navy"), col = c("steelblue4", "violetred4", "gold", "red", "navy"), cex = 0.75, box.lty = 0)
 
 
 
 #cumulative cases comparison
 #intervention: main = "Comparing the Model Interventions with Non-intervention",
-plot(cumsum(X_italy_p_e[c(1:91), 5]) ~ axis_italy_p[c(1:91)] , type = 'l', col = 'pink',  lwd = 3,  ylab = 'Cumulative Cases', xlab = "Time (Days)",  xlim = as.Date(c("2020-01-31", "2020-04-30")), ylim = c(0,150000), main = "B") #with intervetnion
- lines(cumsum(X_italy_p_n[c(1:91), 5]) ~ axis_italy_p[c(1:91)] , col = 'navy', lwd = 3) 
-lines(cum.cases.italy[c(10:73), 2] ~ axis_italy_p[c(1:64)], col = 'chartreuse4', lwd = 3) 
-lines(cumsum(X_italy_p[c(1:91), 5]) ~ axis_italy_p[c(1:91)] ,  col = 'red',  lwd = 3)
-legend("topright", legend = c("Without Interventions", "Current Situation", "With Interventions", "Intervention A \n week earlier"), fill = c("navy", "chartreuse4", "red","pink" ), col = c("navy", "chartreuse4", "red","pink" ), cex = 0.4, box.lty = 0)
+plot(cumsum(X_italy_p_e[c(1:152), 5]) ~ axis_italy_p[c(1:152)] , type = 'l', col = 'pink',  lwd = 3,  ylab = 'Cumulative Cases', xlab = "Time (Days)",  xlim = as.Date(c("2020-01-31", "2020-06-30")), ylim = c(0,150000), main = "Number of Cumulative Cases \n with Interventions") #with intervetnion
+ lines(cumsum(X_italy_p_n[c(1:152), 5]) ~ axis_italy_p[c(1:152)] , col = 'navy', lwd = 3) 
+lines(cum.cases.italy[c(10:77), 2] ~ axis_italy_p[c(1:68)], col = 'chartreuse4', lwd = 3) 
+lines(cumsum(X_italy_p[c(1:152), 5]) ~ axis_italy_p[c(1:152)] ,  col = 'red',  lwd = 3)
+legend("topright", legend = c("Without Interventions", "Current Situation", "With Interventions", "Intervention A \n week earlier"), fill = c("navy", "chartreuse4", "red","pink" ), col = c("navy", "chartreuse4", "red","pink" ), cex = 0.75, box.lty = 0)
 
-par(mfrow = c(1, 1))
+
 #current italy if we are looking at the cumulative infectious cases that result from the model when the interventions are placed compared to when the interventions are not in place, we see that the interventions decrease gradually. When this is compared to the current cumulative cases in Italy, 
 
 ```
