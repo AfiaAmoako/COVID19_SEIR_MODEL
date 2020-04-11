@@ -3,13 +3,13 @@ title: "Italy_Analysis"
 author: "Afia Amoako"
 date: '2020-03-29'
 output:
-  word_document: default
   html_document: default
+  word_document: default
 editor_options:
   chunk_output_type: console
 ---
 
-```{r setup, include=FALSE}
+```{r include=FALSE, results='hide'}
 #required package
 library(httr)
 library(tidyverse)
@@ -23,7 +23,7 @@ Analysis for the impact of intervention on COVID transmission is adapted from Wa
 
 
 ###Importing Data 
-```{r}
+```{r results='hide'}
 COVID <- read.csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv")
 head(COVID, 10)
 summary(COVID)
@@ -32,9 +32,7 @@ summary(COVID)
 ```
 
 ###Cleaning Italy Table 
-```{r}
-#analysis up to 28th march 
-
+```{r results='hide'}
 #CASES
 #cleaning removing province, longititude and latitude 
 COVID.clean <- COVID[ ,-c(1,3,4)]
@@ -45,19 +43,18 @@ COVID.italy <- COVID.clean %>% filter(Country.Region == "Italy")
 start_date <- mdy("1-22-2020")
 end_date <- mdy("4-7-2020")
 intervals <- seq(from = start_date, to=end_date, by = "day")
-cases <- as.numeric(COVID.italy[1, -1])
-cum.cases.italy <- as.data.frame(cbind(Date = intervals, Cases = cases))
-cum.cases.italy$Date <- as.Date(cum.cases.italy$Date, origin ="1970-01-01")
+cases <- as.numeric(COVID.italy[1, -c(1, 79:81)])
+italy.cases <- as.data.frame(cbind(Date = intervals, Cases = cases))
+italy.cases$Date <- as.Date(italy.cases$Date, origin ="1970-01-01")
 
 #plot.cummulative.cases
-plot(cum.cases.italy$Date, type = "l", lwd = "3", col = "navy", cum.cases.italy$Cases, main = "Cumulative Cases in Italy", xlab = "Date", ylab = "Cases")
+plot(italy.cases$Date, type = "l", lwd = "3", col = "navy", italy.cases$Cases, main = "Cumulative Cases in Italy", xlab = "Date", ylab = "Cases")
 ```
 
-#Italy
-##Model Application: Estimating the potential number of infectious people based on different R0 values
+##Model Validation: Estimating the number of cases based on different R0 values
 
-Callibrating the high transmission based on current information (priors) [in a perfect world, i would construct a likelihood function and combine with prior to create a model but it is what it is] chose to callibrate for 40 days so basically when cases in Italy were very strong and government were taking stronger initiative
-```{r}
+Callibrating the high transmission based on current information (priors) to callibrate for first 40 days so basically when cases in Italy were growing quickly with little to no interventions
+```{r results='hide'}
 #assumption: random mixing, person to person transmission, no difference in individual immunity, no deaths
 
 # Parameter values
@@ -129,29 +126,19 @@ first_beta_italy$Date <- axis_italy
 second_beta_italy$Date <- axis_italy
 
 
-#"Estimated Number of People Infectious in \n  Italy with varying R0 values",
-plot(first_beta_italy$I ~ axis_italy, type = 'l',  xlab = "Date", ylab = "Number of People Infectious", col = 'navy', lwd = 3, main = "A")
- lines(second_beta_italy$I ~ axis_italy, col = 'red', lwd = 3)
- legend("topleft", legend = c( "Model R: 3.5","Model R:2.6", "Model R: 1.5"), fill = c("navy", "red", "pink"), col = c("navy", "red", "pink"), cex = 1, box.lty = 1)
-
- 
 #"Comparing Modeled Cumulative Cases in Italy with varying R0 values to current cases",
-plot(cum.cases.italy[c(10:50), 1], cum.cases.italy[c(10:50), 2], type = 'l', xlab = "Date", ylab = "Cumulative Cases", col = "chartreuse4", lwd = 3, main = "Model Validation of \n varying R0 values ")
+plot(italy.cases[c(10:50), 1], italy.cases[c(10:50), 2], type = 'l', xlab = "Date", ylab = "Cumulative Cases", col = "chartreuse4", lwd = 3, main = "Model Validation of \n varying R0 values ")
  lines(cumsum(first_beta_italy$`New Case`) ~ axis_italy, col = "pink", lwd = 3)
  lines(cumsum(second_beta_italy$`New Case`) ~ axis_italy, col = 'red', lwd = 3)
   legend("topleft", legend = c("Cumulative Cases \n in Italy", "Model R: 3.1","Model R:3.5"), fill = c("chartreuse4", "pink",  "red"), col = c("chartreuse4", "pink",  "red"), cex = 0.85, box.lty = 0)
 
-  #caption to see how my model can relate to what is currently seen in italy, I used the model to calculate the number of new infectious people occuring based on the number of people moving into the I column and compared this to the current information on cumulative cases. This will allow me to compare with current cases. 
-
-
-#after graphing, it seem that 3.5 is actually a better growth rate because it is similar to the italy number assuming high transmission rate. Assuming that italy is only counting those who are presenting for testing, tends to be those with some symptoms and this is not including those who are incubating, so could be under estimation. Thus used the I to represent the symptomatic and calculated cumulative cases by the number of cases moving from E to I each time step and then taking the  cumulative sum. 3.5 is a good R0 to start with. 
 ```
 
-##Model Application intervention!
+##Phase Adjustment
 
-I applied interventions put in place to slow transmission looked at how that will change incidences. I compared my values to the cumulative cases, looking at the current situation, my model approximation of the current situation and if the intervention actually creates an impact
+I applied interventions put in place to slow transmission looked at how that will change cases. I compared my values to the cumulative cases, looking at the current situation, my model approximation of the current situation and if the intervention actually creates an impact
 
-```{r}
+```{r  results='hide'}
 
 ##############################Intervention###########################################
 
@@ -252,7 +239,6 @@ S_italy_n <- N_italy_n-E_italy_n-I_italy_n-R_italy_n
 alpha <- 1/5.6 #incubation period
 gamma <- 1/5 #recovery period
 duration <-5 #days 
-# R0 and beta for different phases based on the impact of intervention to minimize transmission #using infromation from more recent papers. Since R0 = ce/D, these interventions are targeting the ce (contact rate) to reduce transmision. 
 
 R0_3 <- 3.5 #high end (the CI from JHU and authors)
 beta_3 <- R0_3/(N_italy * duration)
@@ -293,7 +279,7 @@ X_italy_p_n$date <- axis_italy_p
 ###########plots#################
 
 #plot: number of new cases main = "Impact of Intervention on the Number of Infectious People Each Day",
-plot(X_italy_p[c(1:24), 3] ~ axis_italy_p[c(1:24)] ,  col = 'steelblue4',  lwd = 3,  type = 'l', ylab = "Number of People Infectious", xlab = "Time (Days)",  xlim = as.Date(c("2020-01-31", "2020-06-30")), ylim = c(0,10000), main = "A")
+plot(X_italy_p[c(1:24), 3] ~ axis_italy_p[c(1:24)] ,  col = 'steelblue4',  lwd = 3,  type = 'l', ylab = "Number of People Infectious", xlab = "Time (Days)",  xlim = as.Date(c("2020-01-31", "2020-06-30")), ylim = c(0,10000), main = "Number of People Infectious \n with Interventions")
   lines(X_italy_p[c(24:41), 3] ~ axis_italy_p[c(24:41)] , col = 'violetred4', lwd = 3)
   lines(X_italy_p[c(41:55), 3] ~ axis_italy_p[c(41:55)], col = 'gold', lwd = 3)
   lines(X_italy_p[c(55:152), 3] ~ axis_italy_p[c(55:152)], col = 'red', lwd = 3)
@@ -302,24 +288,18 @@ legend("topright", legend = c("R=3.5", "R=2.6", "R=1.5", "R=0.5", "No Interventi
 
 #cumulative cases comparison
 #without intervention
-plot(cumsum(X_italy_p_n[c(1:152), 5]) ~ axis_italy_p[c(1:152)],  col = 'navy',  lwd = 3,  type = 'l', ylab = 'Cumulative Cases', xlab = "Time (Days)",  xlim = as.Date(c("2020-01-31", "2020-06-30")), ylim = c(0,150000), main = "B") 
+plot(cumsum(X_italy_p_n[c(1:152), 5]) ~ axis_italy_p[c(1:152)],  col = 'navy',  lwd = 3,  type = 'l', ylab = 'Cumulative Cases', xlab = "Time (Days)",  xlim = as.Date(c("2020-01-31", "2020-06-30")), ylim = c(0,150000), main = "Number of Cumulative Cases \n with Interventions") 
 #current situation
-lines(cum.cases.italy[c(10:77), 2] ~ axis_italy_p[c(1:68)], col = 'chartreuse4', lwd = 3) 
+lines(italy.cases[c(10:77), 2] ~ axis_italy_p[c(1:68)], col = 'chartreuse4', lwd = 3) 
 #with intervetnion
  lines(cumsum(X_italy_p[c(1:152), 5]) ~ axis_italy_p[c(1:152)],  col = 'red', lwd = 3) 
 legend("topright", legend = c("Without Interventions", "Current Situation", "With Interventions"), fill = c("navy", "chartreuse4", "red"), col = c("navy", "chartreuse4", "red"), cex = 0.75, box.lty = 0)
-
- #current italy if we are looking at the cumulative infectious cases that result from the model when the interventions are placed compared to when the interventions are not in place, we see that the interventions decrease gradually. When this is compared to the current cumulative cases in Italy, 
- 
 
 ```
 
 
 ##Model Application intervention A week Earlier!
-
-I applied interventions put in place to slow transmission looked at how that will change incidences. I compared my values to the cumulative cases, looking at the current situation, my model approximation of the current situation and if the intervention actually creates an impact
-
-```{r}
+```{r  results='hide'}
 
 ##############################Intervention###########################################
 
@@ -430,18 +410,15 @@ legend("topright", legend = c("R=3.5", "R=2.6", "R=1.5", "R=0.5", "No Interventi
 #intervention: main = "Comparing the Model Interventions with Non-intervention",
 plot(cumsum(X_italy_p_e[c(1:152), 5]) ~ axis_italy_p[c(1:152)] , type = 'l', col = 'pink',  lwd = 3,  ylab = 'Cumulative Cases', xlab = "Time (Days)",  xlim = as.Date(c("2020-01-31", "2020-06-30")), ylim = c(0,150000), main = "Number of Cumulative Cases \n with Interventions") #with intervetnion
  lines(cumsum(X_italy_p_n[c(1:152), 5]) ~ axis_italy_p[c(1:152)] , col = 'navy', lwd = 3) 
-lines(cum.cases.italy[c(10:77), 2] ~ axis_italy_p[c(1:68)], col = 'chartreuse4', lwd = 3) 
+lines(italy.cases[c(10:77), 2] ~ axis_italy_p[c(1:68)], col = 'chartreuse4', lwd = 3) 
 lines(cumsum(X_italy_p[c(1:152), 5]) ~ axis_italy_p[c(1:152)] ,  col = 'red',  lwd = 3)
 legend("topright", legend = c("Without Interventions", "Current Situation", "With Interventions", "Intervention A \n week earlier"), fill = c("navy", "chartreuse4", "red","pink" ), col = c("navy", "chartreuse4", "red","pink" ), cex = 0.75, box.lty = 0)
-
-
-#current italy if we are looking at the cumulative infectious cases that result from the model when the interventions are placed compared to when the interventions are not in place, we see that the interventions decrease gradually. When this is compared to the current cumulative cases in Italy, 
 
 ```
 
 
 #Comparing Values if the intervention was earlier
-```{r}
+```{r  results='hide'}
 max.nointervention <- max(X_italy_p_n$I)
 
 max.phase.infect <- max(X_italy_p$I)
